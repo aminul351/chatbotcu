@@ -15,7 +15,10 @@ const app = express();
 
 const ALLOWED_ORIGINS = [
   process.env.CLIENT_URL || "http://localhost:3000",
-  "http://localhost:3000", "http://localhost:3001", "http://localhost:3002",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "https://cuchatbot.vercel.app", // add your vercel frontend URL
 ];
 
 app.use((req, res, next) => {
@@ -30,16 +33,21 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
 app.use(express.json());
 
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.log("MongoDB Error:", err));
-
-const PORT = process.env.PORT || 5001;
+// MongoDB connection with caching for serverless
+let isConnected = false;
+async function connectDB() {
+  if (isConnected) return;
+  await mongoose.connect(process.env.MONGODB_URI);
+  isConnected = true;
+  console.log("MongoDB Connected");
+}
 
 async function start() {
+  await connectDB();
+
   const [authRoutes, chatRoutes, facultyRoutes, adminRoutes] = await Promise.all([
     import("./routes/auth.js"),
     import("./routes/chat.js"),
@@ -52,13 +60,15 @@ async function start() {
   app.use("/api/faculty", facultyRoutes.default);
   app.use("/api/admin", adminRoutes.default);
 
-  app.get("/", (req, res) => {
-    res.send("Hello World!");
-  });
+  app.get("/", (req, res) => res.send("Backend running!"));
 
-  app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-  });
+  // Only listen locally
+  if (process.env.NODE_ENV !== "production") {
+    const PORT = process.env.PORT || 5001;
+    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  }
 }
 
 start();
+
+export default app;
